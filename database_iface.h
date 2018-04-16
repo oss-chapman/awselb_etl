@@ -12,7 +12,7 @@ extern int db_prepare_connection(int argc, char** argv, void ** ppUserData);
 
 
 // insert a single row read from filename@lineno
-extern int db_insert_elbrow(void* pUserData, const char* filename, int lineno, const struct elb_entry row); 
+extern int db_insert_elbrow(void* pUserData, const char* filename, int lineno, const struct elb_entry* row); 
 
 
 // end of all runs.
@@ -20,4 +20,4 @@ extern int db_finalize(void* pUserData);
 
 
 
-#endif _DATABASE_IFACE_H_
+#endif //_DATABASE_IFACE_H_

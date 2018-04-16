@@ -2,81 +2,43 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <sqlite3.h>
+#include <string.h>
 #include <time.h>
-
+#include "elb_entry.h"
 #include "parse_request.h"
 #include "database_iface.h"  
+#include "sqlite3_log.h"
+#include "sqlite3_coldefs.h"
 
 
-void db_run_ddl(sqlite3* db, const char* name, const char* stmt)
-{
-  int err;
+struct table_name_def {
+  const char* name;
+  const struct my_column_def* cols;
+  sqlite3_stmt* stmt;
+};
 
-  
-  
-  
-  struct csqlite3_stmt* pStmt;
-  err = sqlite3_prepare_v3(db,
-                           elblog_file,
-                           -1, // null terminated strings.
-                           0,
-                           &pStmt,
-                           NULL);
-  if (err != SQLITE_OK) {
-    db_error_abort(err, "Failure running %s create.\n%s", name, sqlite3_errmsg(db));
-  }
+static char* current_filename = NULL;
+static sqlite3_int64 current_filename_rowid=0;
 
-  err = 0;
-  for(;;) {
-    err = sqlite3_step(pStmt);
-    switch (err) {
-    case SQLITE_DONE:
-      goto DDL_DONE;
-    case SQLITE_ROW:
-      db_error_abort(err, "UNEXPECTED Row returned during %s DDL execution", name);
-      break;
-    default:
-      debug("unexpected return 0x%x, %s from DDL %s", err, sqlite3_errmsg(db), name);
-      break;
-    }
-  }     
- DDL_DONE:
-  return;
-}
-
-static struct sqlite3_stmt* pStmt_insert_filename;
-static struct sqlite3_stmt* pStmt_insert_request;
-static struct sqlite3_stmt* pStmt_insert_elblog;
+struct table_name_def table_name_defs[] = {
+  {"elblog_file", elblog_file_columns, NULL},
+  {"elblog_requests", request_columns, NULL},
+  {"elblog", elblog_columns, NULL},
+  {NULL, NULL, NULL}
+};
 
 
 static int prepare_statements(struct sqlite3* db)
 {
-  err = sqlite3_prepare_v3(db,
-                           sql_insert_elblogfile,
-                           -1, // null terminated strings.
-                           0,
-                           &pStmt_insert_filename,
-                           NULL);
-  if (err != SQLITE_OK) {
-    db_error_abort(err, "UNEXPECTED Row returned during %s DDL execution", name);
-  }
-  err = sqlite3_prepare_v3(db,
-                           sql_insert_request,
-                           -1, // null terminated strings.
-                           0,
-                           &pStmt_insert_request,
-                           NULL);
-  if (err != SQLITE_OK) {
-    db_error_abort(err, "UNEXPECTED Row returned during %s DDL execution", name);
-  }
-  err = sqlite3_prepare_v3(db,
-                           sql_insert_elblog,
-                           -1, // null terminated strings.
-                           0,
-                           &pStmt_insert_elblog,
-                           NULL);
-  if (err != SQLITE_OK) {
-    db_error_abort(err, "UNEXPECTED Row returned during %s DDL execution", name);
+  struct table_name_def* def;
+
+  def = table_name_defs;
+  
+  while(def->name != NULL) {
+    if (create_insert_stmt(db, def->name, def->cols, &def->stmt)) {
+      die(0, "create_insert_stmt(%s) failed. ", def->name);
+    }
+    def++;
   }
   
   return 0;
@@ -86,24 +48,40 @@ static int prepare_statements(struct sqlite3* db)
 
 static int create_tables(sqlite3* db)
 {
+  int err;
+  sqlite3_stmt* stmt;
+  struct table_name_def* def = table_name_defs;
+
+  while(def->name != NULL) {
+    if (create_table_ddl(db, def->name, def->cols, &stmt)) {
+      die(0,"create table %s returned non-zero", def->name);
+    }
+
+    if (db_execute_stmt_simple(stmt) != 0) {
+      die(0,"create table %s exec returned non-zero", def->name);
+    }
+    err = sqlite3_finalize(stmt);
+    if (err != SQLITE_OK) {
+      die(err, "sqlite3_finalize failed for %s", def->name);
+    }
+    debug("Created table %s\n", def->name);
+    def++;
+  }
   
-  
-  db_run_ddl(db, "elblog_file", elblog_file);
-  db_run_ddl(db, "request", request);
-  db_run_ddl(db, "elblog", elblog);
   return 0;
 }
 
 static int open_connection(int argc, char** argv, struct sqlite3** db)
 {
   int err;
-  int dbflags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
+  const char* name = "elblog.sqlite3";
+  int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
     SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_PRIVATECACHE;
   
-  err = sqlite3_open_v2("elblogs.sqlite3", db, flags, "unix-excl");
+  err = sqlite3_open_v2(name, db, flags, "unix-excl");
 
   if (err != SQLITE_OK) {
-    db_error_abort(err, "Failed to open %s, %s.\n", name, sqlite3_errmsg(db));
+    die(err, "Failed to open %s, %s.\n", name, sqlite3_errmsg(*db));
   }
 
   
@@ -132,59 +110,104 @@ int db_prepare_connection(int argc, char** argv, void** ppUserData)
   
 }
 
-
-
-
-static int db_bind_filename(struct sqlite3* db, const char* filename)
-{
-  char ts[64];
-
-  snprintf(ts, sizeof(ts), "%g", gettimeofday());
-  
-  err = sqlite3_reset(pStmt_insert_filename);
-  if (err != SQLITE_OK) {
-    db_error_abort(err, "Failed to reset stmt_filename %s.\n", sqlite3_errmsg(db));
-  }
-  err = sqlite3_bind_text(pStmt_insert_filename, 1, filename, -1, SQLITE_STATIC, NULL);
-  if (err != SQLITE_OK) {
-    db_error_abort(err, "Failed to bind arg 1 stmt_filename %s.\n", sqlite3_errmsg(db));
-  }
-
-  err = sqlite3_bind_text(pStmt_insert_filename, 2, ts, -1, SQLITE_TRANSIENT, NULL);
-  if (err != SQLITE_OK) {
-    db_error_abort(err, "Failed to bind arg 1 stmt_filename %s.\n", sqlite3_errmsg(db));
-  }
-  return 0;
-}
-
-static int db_bind_request(struct sqlite3* db, const struct 
-
-
-
 /**
  * Step 2-n, insert the rows
  */
 int db_insert_elbrow(void* pUserData, const char* filename, int lineno,
-                     const struct elb_entry row)
+                     const struct elb_entry* row)
 {
+  int err;
+  sqlite3_int64 request_rowid;
+  sqlite3_int64 elbrow_rowid;
+  struct parsed_request* pr= NULL;
+  
+  // Handle filename change:
   if (current_filename == NULL ||
       strcmp(current_filename, filename) != 0) {
     if (current_filename != NULL) {
       free(current_filename);
     }
     current_filename = strdup(filename);
-
-    err = db_bindfilename(db, filename);
-    if (err) {
-      return err;
-    }
     
-
+    err = db_run_insert(table_name_defs[0].stmt,
+                        &current_filename_rowid,
+                        table_name_defs[0].cols,
+                        current_filename,
+                        time(0) * 1.0);                 
+    if (err) return err;
     
+    debug("file %s is rowid %lld\n",
+          current_filename, current_filename_rowid);
+  }
+  
+  // decode request and insert that:   
+  err = parse_request(row->request, &pr);
+  if (err) return err;
+
+  err = db_run_insert(table_name_defs[1].stmt,
+                      &request_rowid,
+                      table_name_defs[1].cols,
+                      pr->method,
+                      pr->url_protocol,
+                      pr->hostname,
+                      pr->port,
+                      pr->path,
+                      pr->args,
+                      pr->protocol);
+  if (err) return err;
+  
+  err = free_request(pr);
+  if (err) return err;
+  pr = NULL;
+  debug("request %lld inserted\n", request_rowid);
 
 
   
+  // insert the log entry now.
+  err = db_run_insert(table_name_defs[2].stmt,
+                      &elbrow_rowid,
+                      table_name_defs[2].cols,
+                      // col 1
+                      current_filename_rowid,
+                      lineno,
+                      row->protocol,
+                      row->timestamp,
+                      row->elb,
+                      // col 6
+                      row->client_ipaddr,
+                      row->client_port,
+                      row->target_ipaddr,
+                      row->target_port,
+                      row->request_processing_time,
+                      // col 11
+                      row->target_processing_time,
+                      row->response_processing_time,
+                      row->elb_status_code,
+                      row->target_status_code,
+                      row->received_bytes,
+                      // col 16
+                      row->sent_bytes,
+                      request_rowid,
+                      row->user_agent,
+                      row->ssl_cipher,
+                      row->ssl_protocol,
+                      // col 21
+                      row->target_group_arn,
+                      row->trace_id,
+                      row->domain_name,
+                      row->chosen_cert_arn,
+                      row->matched_rule_priority,
+                      -999,
+                      -999,
+                      -999,
+                      -999);
+
+  if (err) return err;
+  debug("request %lld inserted\n", elbrow_rowid);
+
+  return 0;
 }
+
 
 
 /**
@@ -194,7 +217,7 @@ int db_finalize(void* pUserData)
 {
   int err  = sqlite3_close((sqlite3*) pUserData);
   if (err != SQLITE_OK) {
-    db_error_abort(err, "Failed to close db, %s.\n", name, sqlite3_errmsg(db));
+    die(err, "Failed to close db.\n%s\n", sqlite3_errmsg((sqlite3*)pUserData));
   }
   return 0;
 }

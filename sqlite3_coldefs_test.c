@@ -12,6 +12,7 @@ int main(int argc, char** argv)
   sqlite3* db;
   sqlite3_stmt* create_stmt;
   sqlite3_stmt* insert_stmt;
+  sqlite3_int64 rowid;
   
   sqlite3_open("testdb.sqlite3", &db);
 
@@ -26,7 +27,14 @@ int main(int argc, char** argv)
   printf("Table INSERT produced:\n");
 
   printf("insert a row, and get the rowid\n");
-  db_run_insert(insert_stmt, elblog_columns, "my_filename", time(0)*1.0);
+
+  db_run_insert(insert_stmt, &rowid, elblog_file_columns, "my_filename", time(0)*1.0);
+  printf("rowid is %lld\n", rowid);
+  db_run_insert(insert_stmt, &rowid, elblog_file_columns, "my_filename2", time(0)*1.0);
+  printf("rowid is %lld\n", rowid);
+  db_run_insert(insert_stmt, &rowid, elblog_file_columns, "my_filenamesdfa", time(0)*1.0);
+  printf("rowid is %lld\n", rowid);
+
   
   return 0;
 }

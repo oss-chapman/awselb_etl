@@ -135,17 +135,17 @@ IPADDR [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
     break;
   
   case TRACE_ID:
-    e.user_agent = text;
+    e.trace_id = text;
     state++;
     break;
   
   case DOMAIN_NAME: 
-    e.user_agent = text;
+    e.domain_name = text;
     state++;
     break;
   
   case CHOSEN_CERT_ARN:
-    e.user_agent = text;
+    e.chosen_cert_arn = text;
     state++;
     break;
     

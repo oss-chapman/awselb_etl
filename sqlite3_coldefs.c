@@ -4,7 +4,9 @@
 #include <alloca.h>
 
 #include <sqlite3.h>
+#include "sqlite3_log.h"
 #include "sqlite3_coldefs.h"
+
 
 const struct my_column_def elblog_file_columns[] = {
   {SQLITE_INTEGER, 0, "id", "INTEGER PRIMARY KEY AUTOINCREMENT"},
@@ -27,26 +29,31 @@ const struct my_column_def request_columns[] = {
 
 const struct my_column_def elblog_columns[] = {
   {SQLITE_INTEGER, 0,  "id",     "INTEGER PRIMARY KEY AUTOINCREMENT"},
+  // col 1
   {SQLITE_INTEGER, 1,  "elblog_file_id", "REFERENCES elblog_file(id) ON DELETE CASCADE"},
   {SQLITE_INTEGER, 1,  "elblog_file_lineno", "INTEGER NOT NULL"},
   {SQLITE3_TEXT,   1,  "protocol", "TEXT NOT NULL"},
-  {SQLITE_FLOAT,   1,  "timestamp", "FLOAT NOT NULL"},
+  {SQLITE3_TEXT,   1,  "timestamp", "TEXT NOT NULL"},
   {SQLITE3_TEXT,   1,  "elb", "TEXT NOT NULL"},
+  // col 6
   {SQLITE3_TEXT,   1,  "client_ipaddr", "TEXT NOT NULL"},
   {SQLITE_INTEGER, 1,  "client_port", "INTEGER NOT NULL"},
   {SQLITE3_TEXT,   1,  "target_ipaddr", "TEXT NOT NULL"},
   {SQLITE_INTEGER, 1,  "target_port", "INTEGER NOT NULL"},
   {SQLITE_FLOAT,   1,  "request_processing_time", "FLOAT NOT NULL"},
+  // col 11
   {SQLITE_FLOAT,   1,  "target_processing_time", "FLOAT NOT NULL"},
   {SQLITE_FLOAT,   1,  "response_processing_time", "FLOAT NOT NULL"},
   {SQLITE_INTEGER, 1,  "elb_status_code", "INTEGER NOT NULL"},
   {SQLITE_INTEGER, 1,  "target_status_code", "INTEGER NOT NULL"},
   {SQLITE_INTEGER, 1,  "received_bytes", "INTEGER NOT NULL"},
+  // col 16
   {SQLITE_INTEGER, 1,  "sent_bytes", "INTEGER NOT NULL"}, 
   {SQLITE_INTEGER, 1,  "request_id", "REFERENCES request(id) ON DELETE RESTRICT"},
   {SQLITE3_TEXT,   1,  "user_agent", "TEXT NOT NULL"},
   {SQLITE3_TEXT,   1,  "ssl_cipher", "TEXT NOT NULL"},
   {SQLITE3_TEXT,   1,  "ssl_protocol", "TEXT NOT NULL"},
+  // col 21
   {SQLITE3_TEXT,   1,  "target_group_arn", "TEXT NOT NULL"},
   {SQLITE3_TEXT,   1,  "trace_id", "TEXT NOT NULL"},
   {SQLITE3_TEXT,   1,  "domain_name", "TEXT NOT NULL"},
@@ -54,29 +61,6 @@ const struct my_column_def elblog_columns[] = {
   {SQLITE_INTEGER, 1,  "matched_rule_priority", "INTEGER NOT NULL"},
   {0, 0, "", ""}
 };
-
-
-
-void debug(const char* fmt, ... )
-{
-  va_list ap;
-  fprintf(stdout, __FILE__ ": debug ");
-  
-  va_start(ap, fmt);
-  vfprintf(stdout, fmt, ap);
-  va_end(ap); 
-}
-
-void die(int err, const char* fmt, ... )
-{
-  va_list ap;
-  fprintf(stderr, "%s: DB Error 0x%x ",__FILE__, err);
-  va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
-  va_end(ap);
-  fprintf(stderr,"\nForcing exit\n");
-  exit(5);
-}
 
 
 
@@ -93,7 +77,7 @@ int create_table_ddl(sqlite3* db,
   const struct my_column_def* curr_col = cols;
 
 
-  offset = sprintf(ptr, "CREATE TABLE %s ",table_name);
+  offset = sprintf(ptr, "CREATE TABLE IF NOT EXISTS %s ",table_name);
   ptr += offset;
 
   while (curr_col->sqlite_type != 0) {
@@ -191,7 +175,7 @@ int create_insert_stmt(sqlite3* db,
 
 
 
-int db_run_insert(sqlite3_stmt* stmt, const struct my_column_def* cols, ...)
+int db_run_insert(sqlite3_stmt* stmt, sqlite3_int64 *rowid, const struct my_column_def* cols, ...)
 {
   va_list args;
   int err;
@@ -234,6 +218,9 @@ int db_run_insert(sqlite3_stmt* stmt, const struct my_column_def* cols, ...)
         break;
       case SQLITE3_TEXT:
         cval = va_arg(args, char*);
+        if (cval == NULL) {
+          die(0, "insert value for bind field %s (%d) should not be null\n", cols->name, insert_num);
+        }
         err = sqlite3_bind_text(stmt, insert_num, cval, -1, SQLITE_STATIC);
         if (err != SQLITE_OK) {
           goto BIND_BAD_END;
@@ -248,9 +235,16 @@ int db_run_insert(sqlite3_stmt* stmt, const struct my_column_def* cols, ...)
     cols++;
   }
   va_end(args);
+  insert_num += 10000;
+  
+  err = db_execute_stmt_simple(stmt);
+  if (err != 0) {
+    goto BIND_BAD_END;
 
-  return db_execute_stmt_simple(stmt);
-
+  }
+  *rowid = sqlite3_last_insert_rowid(sqlite3_db_handle(stmt));
+  
+  return 0;
   
  BIND_BAD_END:
   die(err, "%s: failed to bind on column %d, \n%s\n",__PRETTY_FUNCTION__,
