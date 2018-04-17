@@ -1,7 +1,7 @@
 
 
-CFLAGS=-O0 -ggdb -Wall
-LDFLAGS=-lsqlite3
+CFLAGS=-O6 -ggdb -Wall
+LDFLAGS=-lsqlite3 -lz
 
 all: elb_lexer
 test: sqlite3_coldefs_test

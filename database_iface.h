@@ -8,7 +8,7 @@
  * what to do with it.
  */
 // Do whatever necessary to get the database ready for connections and inserts.
-extern int db_prepare_connection(int argc, char** argv, void ** ppUserData);
+extern int db_prepare_connection(int* argc, char*** argv, void ** ppUserData);
 
 
 // insert a single row read from filename@lineno

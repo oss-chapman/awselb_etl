@@ -20,10 +20,16 @@ extern int create_table_ddl(sqlite3* db,
                             const struct my_column_def* cols,
                             sqlite3_stmt** ddl);
 
+extern int db_create_transaction_stmts(sqlite3* db,
+                                       sqlite3_stmt** begin_stmt,
+                                       sqlite3_stmt** commit_stmt);
+
 extern int create_insert_stmt(sqlite3* db,
                               const char* table_name,
                               const struct my_column_def* cols,
                               sqlite3_stmt** dml);
+
+
 
 extern int db_run_insert(sqlite3_stmt* stmt, sqlite3_int64* rowid, const struct my_column_def* cols, ...);
 

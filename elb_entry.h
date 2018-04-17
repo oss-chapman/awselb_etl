@@ -1,6 +1,8 @@
 #ifndef _ELB_ENTRY_H_
 #define _ELB_ENTRY_H_
 
+extern gzFile gzyyin;
+
 typedef char * t_sptr;
 struct elb_entry {
   t_sptr protocol;
@@ -49,7 +51,8 @@ enum elb_entry_field {
   TRACE_ID=17,
   DOMAIN_NAME=18,
   CHOSEN_CERT_ARN=19,
-  MATCHED_RULE_PRIORITY=20
+  MATCHED_RULE_PRIORITY=20,
+  EOL_FULL_PARSE=21,
 };
 
 int found_aws_elb_entry(const char* filename, int lineno, const struct elb_entry* entry, enum elb_entry_field state);

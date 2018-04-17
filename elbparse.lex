@@ -6,7 +6,10 @@
 #include <stdlib.h>  
 #include <error.h>
 #include <malloc.h>
+#include <zlib.h>
 #include "elb_entry.h"
+
+  gzFile gzyyin;
 
   char * current_filename;
   int lineno=1;
@@ -31,14 +34,26 @@
     memset(&e, 0, sizeof(struct elb_entry) );
     state = PROTOCOL;
   }
-                              
+
+#define YY_INPUT(buf, result, max_size) \
+  { \
+    int readret;                                \
+    readret = gzread(gzyyin, buf, max_size);    \
+    result = ( readret == -1 ) ? YY_NULL : readret; \
+  }
+  
+  int yywrap(void)
+  {
+    lineno = 1;
+    return 1;
+  }
   
 %}
 
 IPADDR [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
 
 
-%option noyywrap
+
 
 
 %%
@@ -78,7 +93,7 @@ IPADDR [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
 }
 
 
-"-"|[0-9]+      {
+"-"|[0-9]+|-1      {
   int value;
   if (strcmp("-", yytext) == 0) {
     value = -999;
@@ -108,6 +123,22 @@ IPADDR [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
     e.target_status_code = value;
     state++;
     break;
+
+  case MATCHED_RULE_PRIORITY:
+    e.matched_rule_priority = value;
+    state++;
+    break;
+
+  case TARGET_PROCESSING_TIME:
+    e.target_processing_time = strtof(yytext, NULL);
+    state++;
+    break;
+
+  case RESPONSE_PROCESSING_TIME:
+    e.response_processing_time = strtof(yytext, NULL);
+    state ++;
+    break;
+
     
   default:   
     error_at_line(6,0,current_filename, lineno,
@@ -239,9 +270,6 @@ IPADDR [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
     break;
   case CHOSEN_CERT_ARN:
     e.chosen_cert_arn = text;
-    state++;
-    break;
-  case MATCHED_RULE_PRIORITY:
     state++;
     break;
   default:

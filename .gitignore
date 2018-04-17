@@ -1,0 +1,5 @@
+*.o
+*.yy.c
+sqlite3_coldefs_test
+elb.log
+elb_lexer

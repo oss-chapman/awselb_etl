@@ -136,8 +136,6 @@ int create_insert_stmt(sqlite3* db,
   ptr_a = text;
   ptr_v = values;
 
- 
-  
   memset (values, 0, 512);
 
 
@@ -172,8 +170,20 @@ int create_insert_stmt(sqlite3* db,
   return 0;
 }
 
+int db_create_transaction_stmts(sqlite3* db, sqlite3_stmt** begin_stmt, sqlite3_stmt** commit_stmt)
+{
+  int err;
+  err = sqlite3_prepare_v2(db, "BEGIN TRANSACTION;", -1, begin_stmt, NULL);
+  if (err != SQLITE_OK) {
+    die(err, "%s: failed to create BEGIN TRANSACTION stmt\n%s\n",__PRETTY_FUNCTION__, sqlite3_errmsg(db));
+  }
+  err = sqlite3_prepare_v2(db, "COMMIT TRANSACTION;", -1, commit_stmt, NULL);
+  if (err != SQLITE_OK) {
+    die(err, "%s: failed to create COMMIT TRANSACTION stmt\n%s\n",__PRETTY_FUNCTION__, sqlite3_errmsg(db));
+  }
 
-
+  return 0;
+}
 
 int db_run_insert(sqlite3_stmt* stmt, sqlite3_int64 *rowid, const struct my_column_def* cols, ...)
 {
