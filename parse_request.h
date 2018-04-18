@@ -20,7 +20,12 @@
 #define _PARSE_REQUEST_H_
 
 struct parsed_request {
-  // "GET https://jirasw.prd.nibr.novartis.net:8444/s/870534f3dea88c2ac9316156a3533164-CDN/-e4gdkl/73018/b6b48b2829824b869586ac216d119363/bca19ec1db8e505bd4bfde9425964399/_/download/contextbatch/css/jira.global.look-and-feel,-_super/batch.css?locale=en-US HTTP/1.1"
+  // Request lines look like this:
+  // "GET https://myserver.com:443/path/downloads/list.jsp?locale=en-US HTTP/1.1"
+  // which would become:
+  // ("GET", "https", "myserver.com", 443, "/path/downloads/list.jsp", "local=en-us", "HTTP/1.1")
+
+
   char *method;
   char *url_protocol;
   char *hostname;
